@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-    Removes the All Campaigns mod and restores the files install.ps1 backed up.
+    Removes the All Campaigns mod, and Lazy Mod / DisciplesGL-Modern if install.ps1 added
+    them, and restores the files install.ps1 backed up.
 
 .DESCRIPTION
     Your saved games (SaveGame folder) and the toolset's .log files are left alone.
@@ -55,6 +56,28 @@ $state = Get-Content -LiteralPath $info -Raw | ConvertFrom-Json
 
 foreach ($f in 'MSS32.DLL', 'Interf.dlg', 'scens') {
     if (-not (Test-Path -LiteralPath (Join-Path $backup $f))) { Fail "Backup is incomplete: '$f' is missing. Nothing was changed." }
+}
+
+# Optional mods (Lazy Mod, DisciplesGL-Modern), newest first: delete the files they added,
+# put back the files they replaced, and remove folders that are left empty.
+$optional = @()
+if ($state.PSObject.Properties.Name -contains 'optional' -and $state.optional) { $optional = @($state.optional) }
+[array]::Reverse($optional)
+foreach ($o in $optional) {
+    Write-Host "Removing $($o.label)..."
+    foreach ($rel in @($o.added)) {
+        $p = Join-Path $GamePath $rel
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
+        $dir = Split-Path $p
+        while ($dir.Length -gt $GamePath.TrimEnd('\').Length -and (Test-Path -LiteralPath $dir) -and
+               -not (Get-ChildItem -LiteralPath $dir -Force | Select-Object -First 1)) {
+            Remove-Item -LiteralPath $dir -Force
+            $dir = Split-Path $dir
+        }
+    }
+    foreach ($rel in @($o.replaced)) {
+        Copy-Item -LiteralPath (Join-Path $backup "optional\$($o.label)\$rel") -Destination (Join-Path $GamePath $rel) -Force
+    }
 }
 
 Write-Host "Restoring MSS32.DLL..."

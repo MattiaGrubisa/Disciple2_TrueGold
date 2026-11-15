@@ -10,32 +10,63 @@
     - Copies the real Gallean's Return missions from your own Dark Prophecy / Gallean's Return
       install into Rise of the Elves' scens tables, replacing the empty stubs Rise of the Elves ships.
     - Creates the SaveGame folder, which the GOG install lacks.
+    - Optionally installs Lazy Mod 1.06 (from a zip or folder you downloaded from ModDB)
+      and the DisciplesGL-Modern OpenGL wrapper (downloaded from its GitHub release).
 
-    Run uninstall.ps1 to put everything back.
+    Run uninstall.ps1 to put everything back, optional mods included.
 
 .PARAMETER GamePath
     Rise of the Elves folder. If left out, the GOG registry entry is offered as default.
 
 .PARAMETER BasePath
     Dark Prophecy / Gallean's Return folder. If left out, the GOG registry entry is offered as default.
+
+.PARAMETER LazyMod
+    ask (default), yes or no.
+
+.PARAMETER LazyModSource
+    Downloaded Lazy Mod 1.06 zip, or the folder it was unpacked to. Asked for if left out.
+
+.PARAMETER Wrapper
+    ask (default), yes or no: install the DisciplesGL-Modern OpenGL wrapper.
+
+.PARAMETER WrapperZip
+    Use an already downloaded DisciplesGL-Modern-C4dll-R.zip instead of downloading it.
 #>
 param(
     [string]$GamePath,
-    [string]$BasePath
+    [string]$BasePath,
+    [ValidateSet('ask', 'yes', 'no')][string]$LazyMod = 'ask',
+    [string]$LazyModSource,
+    [ValidateSet('ask', 'yes', 'no')][string]$Wrapper = 'ask',
+    [string]$WrapperZip
 )
 
 $ErrorActionPreference = 'Stop'
 
 $BackupName = '_AllCampaigns_backup'
-# Two GOG v3.01 builds exist. They only differ in six unit id strings in the data
-# section, the code (and so every hooked address) is identical.
+# Accepted executables:
+#  - GOG Rise of the Elves v3.01 as GOG ships it.
+#  - Lazy Mod 1.06's Discipl2.exe. Same size and same code as the GOG one, it only blanks
+#    six unit id strings in the data section, so every hooked address is unchanged.
 $RoteExeSha256 = @(
-    '3964DF2F9EFBE92CC9777080FA00B242557EFDB4654410BE67E50A4DBCDC85BD',
-    '88DC8162D60D79F394696DB5FF48C68586E21F1F99A6C4D1C2328DEA81771D8F'
+    '88DC8162D60D79F394696DB5FF48C68586E21F1F99A6C4D1C2328DEA81771D8F', # GOG v3.01
+    '3964DF2F9EFBE92CC9777080FA00B242557EFDB4654410BE67E50A4DBCDC85BD'  # Lazy Mod 1.06
 )
 $RoteGogId = '1207663713'
 $BaseGogId = '1207663703'
 $Files = Join-Path $PSScriptRoot 'files'
+
+# Optional mods. Neither is shipped with this mod: Lazy Mod contains the game's (modified)
+# executable, and ModDB doesn't allow scripted downloads, so the player downloads it.
+# The wrapper is MIT licensed and has a GitHub release, so it's downloaded here. The version
+# is pinned and checked by hash, so a later release can't change what gets installed untested.
+$LazyExeSha256 = $RoteExeSha256[1]
+$LazyModUrl = 'https://www.moddb.com/mods/d2rote-lazy-mod/downloads/disciples-2-lazy-mod-106'
+$WrapperVersion = 'v2026.4'
+$WrapperUrl = "https://github.com/gitTerebi/DisciplesGL-Modern/releases/download/$WrapperVersion/DisciplesGL-Modern-C4dll-R.zip"
+$WrapperZipSha256 = '4BB25C457B5506F10B5D5E7238936028A38837BED4516BA32A146A576AB126D3'
+$WrapperDllSha256 = '4256157F4D2C5B96F52C36F35F26190E2510C259079C6F3D4F0F8CC033468969'
 
 $DlgLines = @(
     "`tBUTTON`tBTN_GALLEAN,598,496,668,543,_MENU_CONTINUE_N,_MENU_CONTINUE_H,_MENU_CONTINUE_C,_MENU_CONTINUE_D,`"`",0,0",
@@ -264,7 +295,72 @@ function Find-Child([string]$dir, [string]$name) {
 function Fail([string]$msg) {
     Write-Host ""
     Write-Host "ERROR: $msg" -ForegroundColor Red
+    if ($script:tmpRoot -and (Test-Path -LiteralPath $script:tmpRoot)) {
+        Remove-Item -LiteralPath $script:tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
     exit 1
+}
+
+function Read-YesNo([string]$question, [bool]$default) {
+    $hint = if ($default) { '[Y/n]' } else { '[y/N]' }
+    while ($true) {
+        $a = (Read-Host "$question $hint").Trim().ToLower()
+        if (-not $a) { return $default }
+        if ($a -in 'y', 'yes') { return $true }
+        if ($a -in 'n', 'no') { return $false }
+    }
+}
+
+# Plain .NET instead of Get-FileHash, which isn't always loadable in Windows PowerShell.
+function Get-Sha256([string]$path) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $fs = [IO.File]::OpenRead((Resolve-Path -LiteralPath $path).Path)
+    try { return ([BitConverter]::ToString($sha.ComputeHash($fs)) -replace '-', '') }
+    finally { $fs.Dispose(); $sha.Dispose() }
+}
+
+# Unpacks a zip into a new temp folder, or returns a folder as it is.
+function Open-Source([string]$path, [string]$name) {
+    if (Test-Path -LiteralPath $path -PathType Container) { return (Resolve-Path -LiteralPath $path).Path }
+    if (-not (Test-Path -LiteralPath $path)) { Fail "'$path' not found." }
+    if ([IO.Path]::GetExtension($path) -ine '.zip') {
+        Fail "'$path' isn't a .zip. Unpack it first (7-Zip opens .rar and .7z) and give the folder instead."
+    }
+    $dir = Join-Path $script:tmpRoot $name
+    # .NET's zip support instead of Expand-Archive, which isn't always loadable in Windows PowerShell.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    try {
+        [IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path -LiteralPath $path).Path, $dir)
+    } catch {
+        Fail "Couldn't unpack '$path': $($_.Exception.Message)"
+    }
+    return $dir
+}
+
+# Copies every file of $files (paths relative to $srcRoot) into the game folder. Files it
+# replaces are backed up to $backup\optional\<label>\ first. Returns what uninstall needs.
+function Install-Optional([string]$label, [string]$srcRoot, [string[]]$files) {
+    $store = Join-Path $backup "optional\$label"
+    $added = @(); $replaced = @()
+    foreach ($rel in $files) {
+        $dst = Join-Path $GamePath $rel
+        if (Test-Path -LiteralPath $dst) {
+            $keep = Join-Path $store $rel
+            New-Item -ItemType Directory -Path (Split-Path $keep) -Force | Out-Null
+            Copy-Item -LiteralPath $dst -Destination $keep
+            $replaced += $rel
+        } else {
+            New-Item -ItemType Directory -Path (Split-Path $dst) -Force | Out-Null
+            $added += $rel
+        }
+        Copy-Item -LiteralPath (Join-Path $srcRoot $rel) -Destination $dst -Force
+    }
+    return [ordered]@{ label = $label; added = $added; replaced = $replaced }
+}
+
+function Get-RelativeFiles([string]$root) {
+    $prefix = $root.TrimEnd('\').Length + 1
+    return @(Get-ChildItem -LiteralPath $root -Recurse -File | ForEach-Object { $_.FullName.Substring($prefix) })
 }
 
 # ---------------------------------------------------------------------------
@@ -282,7 +378,7 @@ if (-not $BasePath) { $BasePath = Read-Folder "Dark Prophecy / Gallean's Return"
 
 $exe = Join-Path $GamePath 'Discipl2.exe'
 if (-not (Test-Path -LiteralPath $exe)) { Fail "No Discipl2.exe in '$GamePath'." }
-if ($RoteExeSha256 -notcontains (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash) {
+if ($RoteExeSha256 -notcontains (Get-Sha256 $exe)) {
     Fail "Discipl2.exe in '$GamePath' is not the GOG Rise of the Elves v3.01 executable. The mod only works with that exact version."
 }
 
@@ -329,7 +425,8 @@ $newDlg = $dlgText.Substring(0, $at) + ($DlgLines -join $nl) + $nl + $dlgText.Su
 
 # Convert the scenario tables into a temporary folder first, so a failure changes nothing.
 Write-Host "Copying Gallean's Return missions from '$BasePath'..."
-$tmp = Join-Path ([IO.Path]::GetTempPath()) ("AllCampaigns_" + [guid]::NewGuid().ToString('N'))
+$script:tmpRoot = Join-Path ([IO.Path]::GetTempPath()) ("AllCampaigns_" + [guid]::NewGuid().ToString('N'))
+$tmp = Join-Path $tmpRoot 'scens'
 $added = 0
 try {
     $report = [GrScensPort]::Port($baseScens, $roteScens, $tmp, [ref]$added)
@@ -342,6 +439,82 @@ if ($added -eq 0) {
     Fail "No Gallean's Return missions found in '$baseScens'. Is that the GOG Dark Prophecy / Gallean's Return v2.02 install?"
 }
 $report | ForEach-Object { Write-Host "  $_" }
+
+# Optional: Lazy Mod 1.06 ----------------------------------------------------
+Write-Host ""
+$lazyRoot = $null
+if ((Get-Sha256 $exe) -eq $LazyExeSha256) {
+    Write-Host "Lazy Mod 1.06 is already installed in this game, skipping it."
+} else {
+    $want = switch ($LazyMod) {
+        'yes' { $true }
+        'no' { $false }
+        default {
+            Write-Host "Lazy Mod 1.06 is a rebalance of Rise of the Elves: stronger heroes, new skills,"
+            Write-Host "reworked items, a tougher AI. The Gallean's Return missions work with it."
+            Read-YesNo "Install Lazy Mod 1.06?" $false
+        }
+    }
+    if ($want) {
+        if (-not $LazyModSource) {
+            Write-Host "Lazy Mod has to be downloaded by hand from ModDB. Opening the download page..."
+            Write-Host "  $LazyModUrl"
+            try { Start-Process $LazyModUrl } catch {}
+            $LazyModSource = (Read-Host "Path to the downloaded zip, or the folder you unpacked it to").Trim().Trim('"')
+        }
+        $src = Open-Source $LazyModSource 'lazymod'
+        $lazyExe = Get-ChildItem -LiteralPath $src -Recurse -File -Filter 'Discipl2.exe' | Select-Object -First 1
+        if (-not $lazyExe) { Fail "No Discipl2.exe in '$LazyModSource'. Is that Lazy Mod 1.06?" }
+        if ((Get-Sha256 $lazyExe.FullName) -ne $LazyExeSha256) {
+            Fail "Discipl2.exe in '$LazyModSource' isn't the one from Lazy Mod 1.06, the only version known to work with this mod."
+        }
+        $lazyRoot = $lazyExe.DirectoryName
+        $lazyFiles = @(Get-RelativeFiles $lazyRoot | Where-Object { $_ -notlike '*.txt' })
+        Write-Host "  Found Lazy Mod 1.06 ($($lazyFiles.Count) files)."
+    }
+}
+
+# Optional: DisciplesGL-Modern wrapper -----------------------------------------
+Write-Host ""
+$wrapperRoot = $null
+$c4 = Join-Path $GamePath 'C4dll-R.dll'
+if ((Test-Path -LiteralPath $c4) -and (Get-Sha256 $c4) -eq $WrapperDllSha256) {
+    Write-Host "DisciplesGL-Modern $WrapperVersion is already installed in this game, skipping it."
+} else {
+    $want = switch ($Wrapper) {
+        'yes' { $true }
+        'no' { $false }
+        default {
+            Write-Host "DisciplesGL-Modern is an OpenGL wrapper that makes the game display properly"
+            Write-Host "on modern Windows and monitors."
+            Read-YesNo "Install DisciplesGL-Modern $WrapperVersion?" $true
+        }
+    }
+    if ($want) {
+        if (-not $WrapperZip) {
+            $WrapperZip = Join-Path $tmpRoot 'DisciplesGL-Modern-C4dll-R.zip'
+            New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+            Write-Host "Downloading DisciplesGL-Modern $WrapperVersion from GitHub..."
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+            $oldProgress = $ProgressPreference
+            $ProgressPreference = 'SilentlyContinue'   # the progress bar makes Windows PowerShell download very slowly
+            try {
+                Invoke-WebRequest -Uri $WrapperUrl -OutFile $WrapperZip -UseBasicParsing
+            } catch {
+                Fail "Download failed ($($_.Exception.Message)). Download $WrapperUrl yourself and run: install.ps1 -WrapperZip <path to the zip>"
+            } finally {
+                $ProgressPreference = $oldProgress
+            }
+        }
+        if ((Get-Sha256 $WrapperZip) -ne $WrapperZipSha256) {
+            Fail "'$WrapperZip' isn't the DisciplesGL-Modern $WrapperVersion release zip."
+        }
+        $wrapperRoot = Open-Source $WrapperZip 'wrapper'
+        $wrapperFiles = @(Get-RelativeFiles $wrapperRoot | Where-Object { $_ -notlike '*.txt' })
+        Write-Host "  Got DisciplesGL-Modern $WrapperVersion ($($wrapperFiles.Count) files)."
+    }
+}
+Write-Host ""
 
 # ---------------------------------------------------------------------------
 # 2. Back up, then install
@@ -356,11 +529,14 @@ $hadScripts = Test-Path -LiteralPath $scripts
 if ($hadScripts) { Copy-Item -LiteralPath $scripts -Destination (Join-Path $backup 'Scripts') -Recurse }
 $saveGame = Join-Path $GamePath 'SaveGame'
 $hadSaveGame = Test-Path -LiteralPath $saveGame
-@{
+$state = [ordered]@{
     hadScripts  = $hadScripts
     hadSaveGame = $hadSaveGame
     mssName     = (Split-Path $mss -Leaf)
-} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backup 'install.json') -Encoding ASCII
+    optional    = @()
+}
+$stateFile = Join-Path $backup 'install.json'
+$state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $stateFile -Encoding ASCII
 
 Write-Host "Installing the modding toolset..."
 Rename-Item -LiteralPath $mss -NewName 'mss23.dll'
@@ -373,12 +549,26 @@ Write-Host "Adding the Gallean's Return button to Interf.dlg..."
 
 Write-Host "Writing scenario tables..."
 Copy-Item -Path (Join-Path $tmp '*') -Destination $roteScens -Force
-Remove-Item -LiteralPath $tmp -Recurse -Force
 
 if (-not $hadSaveGame) {
     Write-Host "Creating SaveGame folder..."
     New-Item -ItemType Directory -Path $saveGame | Out-Null
 }
+
+# Each optional mod is recorded in install.json straight after it's copied, so uninstall can
+# undo it even if a later step fails.
+if ($lazyRoot) {
+    Write-Host "Installing Lazy Mod 1.06..."
+    $state.optional += Install-Optional 'LazyMod' $lazyRoot $lazyFiles
+    $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $stateFile -Encoding ASCII
+}
+if ($wrapperRoot) {
+    Write-Host "Installing DisciplesGL-Modern $WrapperVersion..."
+    $state.optional += Install-Optional 'DisciplesGL' $wrapperRoot $wrapperFiles
+    $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $stateFile -Encoding ASCII
+}
+
+Remove-Item -LiteralPath $tmpRoot -Recurse -Force
 
 Write-Host ""
 Write-Host "Done. Start a new campaign and use the button above Continue on the race screen." -ForegroundColor Green

@@ -29,16 +29,21 @@ if (-not (Test-Path -LiteralPath $Dll)) { throw "Built DLL not found: $Dll" }
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("AllCampaigns_pkg_" + [guid]::NewGuid().ToString('N'))
 $root = Join-Path $stage 'AllCampaigns'
-New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force | Out-Null
+try {
+    New-Item -ItemType Directory -Path (Join-Path $root 'files') -Force | Out-Null
 
-foreach ($f in 'install.ps1', 'install.bat', 'uninstall.ps1', 'uninstall.bat', 'README.md') {
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $f) -Destination $root
+    foreach ($f in 'install.ps1', 'install.bat', 'uninstall.ps1', 'uninstall.bat') {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $f) -Destination $root
+    }
+    Copy-Item -LiteralPath (Join-Path $repo 'README.md') -Destination $root
+    Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $root
+    Copy-Item -LiteralPath $Dll -Destination (Join-Path $root 'files\mss32.dll')
+    Copy-Item -LiteralPath (Join-Path $repo 'Scripts') -Destination (Join-Path $root 'files\Scripts') -Recurse
+
+    if (Test-Path -LiteralPath $Output) { Remove-Item -LiteralPath $Output -Force }
+    Compress-Archive -Path $root -DestinationPath $Output
+    Write-Host "Created $Output"
+} finally {
+    # Runs on failure too, so a broken build leaves no staging folder behind in %TEMP%.
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
 }
-Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $root
-Copy-Item -LiteralPath $Dll -Destination (Join-Path $root 'files\mss32.dll')
-Copy-Item -LiteralPath (Join-Path $repo 'Scripts') -Destination (Join-Path $root 'files\Scripts') -Recurse
-
-if (Test-Path -LiteralPath $Output) { Remove-Item -LiteralPath $Output -Force }
-Compress-Archive -Path $root -DestinationPath $Output
-Remove-Item -LiteralPath $stage -Recurse -Force
-Write-Host "Created $Output"
