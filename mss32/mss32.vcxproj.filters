@@ -1163,6 +1163,15 @@
     <ClCompile Include="src\menunewskirmishmultihooks.cpp">
       <Filter>hooks</Filter>
     </ClCompile>
+    <ClCompile Include="src\customsaga.cpp">
+      <Filter>game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menuracecampaign.cpp">
+      <Filter>game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menuracecampaignhooks.cpp">
+      <Filter>hooks</Filter>
+    </ClCompile>
     <ClCompile Include="src\unitstovalidate.cpp">
       <Filter>features</Filter>
     </ClCompile>
@@ -3212,6 +3221,15 @@
       <Filter>features\random scenario generator</Filter>
     </ClInclude>
     <ClInclude Include="include\menunewskirmishmultihooks.h">
+      <Filter>hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="include\customsaga.h">
+      <Filter>game</Filter>
+    </ClInclude>
+    <ClInclude Include="include\menuracecampaign.h">
+      <Filter>game</Filter>
+    </ClInclude>
+    <ClInclude Include="include\menuracecampaignhooks.h">
       <Filter>hooks</Filter>
     </ClInclude>
     <ClInclude Include="include\menurandomscenariomulti.h">

@@ -116,6 +116,8 @@
 #include "menunewskirmishmultihooks.h"
 #include "menunewskirmishsingle.h"
 #include "menunewskirmishsinglehooks.h"
+#include "menuracecampaign.h"
+#include "menuracecampaignhooks.h"
 #include "menuphasehooks.h"
 #include "menuprotocolhooks.h"
 #include "middatacache.h"
@@ -382,6 +384,20 @@ static Hooks getGameHooks()
         {fn.computeMovementCost, computeMovementCostHooked},
     };
     // clang-format on
+
+    // Let player choose Gallean's Return campaigns on the campaign race menu.
+    // Addresses are only known for GOG Rise of the Elves v3.01.
+    if (gameVersion() == GameVersion::Gog) {
+        auto& raceCampaign = CMenuRaceCampaignApi::get();
+        hooks.emplace_back(HookInfo{raceCampaign.constructor, menuRaceCampaignCtorHooked,
+                                    (void**)&orig.menuRaceCampaignCtor});
+        hooks.emplace_back(HookInfo{raceCampaign.selectCampaign,
+                                    menuRaceCampaignSelectCampaignHooked,
+                                    (void**)&orig.menuRaceCampaignSelectCampaign});
+        hooks.emplace_back(HookInfo{CMenuRaceApi::get().updateButtons,
+                                    menuRaceUpdateButtonsHooked,
+                                    (void**)&orig.menuRaceUpdateButtons});
+    }
 
     if (userSettings().engine.sendRefreshInfoObjectCountLimit) {
         // Fix incomplete scenario loading when its object size exceed network message buffer size

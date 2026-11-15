@@ -42,6 +42,7 @@
 #include "menunewskirmishhotseat.h"
 #include "menunewskirmishmulti.h"
 #include "menunewskirmishsingle.h"
+#include "menuracecampaign.h"
 #include "menuphase.h"
 #include "menuprotocol.h"
 #include "midevcondition.h"
@@ -137,6 +138,9 @@ struct OriginalFunctions
     game::CMenuNewSkirmishSingleApi::Api::Constructor menuNewSkirmishSingleCtor;
     game::CMenuNewSkirmishHotseatApi::Api::Constructor menuNewSkirmishHotseatCtor;
     game::CMenuNewSkirmishMultiApi::Api::Constructor menuNewSkirmishMultiCtor;
+    game::CMenuRaceCampaignApi::Api::Constructor menuRaceCampaignCtor;
+    game::CMenuRaceCampaignApi::Api::SelectCampaign menuRaceCampaignSelectCampaign;
+    game::CMenuRaceApi::Api::UpdateButtons menuRaceUpdateButtons;
     game::IMqNetPlayerVftable::SendNetMessage netSinglePlayerSendMessage;
 
     game::CMidDataCache2::INotifyVftable::OnObjectChanged manageStkInterfOnObjectChanged;

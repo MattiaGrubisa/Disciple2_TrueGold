@@ -1,5 +1,9 @@
 # Modding toolset for Disciples 2 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
+> **This fork adds the All Campaigns mod:** play the Gallean's Return campaigns from GOG Rise of the Elves.
+> See [mods/AllCampaigns](mods/AllCampaigns/README.md) for what it does and how to install it.
+> The original toolset lives at [VladimirMakeev/D2ModdingToolset](https://github.com/VladimirMakeev/D2ModdingToolset).
+
 ### Features:
 
 #### General

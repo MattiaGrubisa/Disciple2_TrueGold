@@ -300,6 +300,9 @@ call ..\buildDetours.bat ..\Detours
     <ClCompile Include="src\menunewskirmishhotseathooks.cpp" />
     <ClCompile Include="src\menunewskirmishmultihooks.cpp" />
     <ClCompile Include="src\menunewskirmishsinglehooks.cpp" />
+    <ClCompile Include="src\customsaga.cpp" />
+    <ClCompile Include="src\menuracecampaign.cpp" />
+    <ClCompile Include="src\menuracecampaignhooks.cpp" />
     <ClCompile Include="src\menurandomscenario.cpp" />
     <ClCompile Include="src\menurandomscenariomulti.cpp" />
     <ClCompile Include="src\menurandomscenariosingle.cpp" />
@@ -763,6 +766,9 @@ call ..\buildDetours.bat ..\Detours
     <ClInclude Include="include\menunewskirmishhotseathooks.h" />
     <ClInclude Include="include\menunewskirmishmultihooks.h" />
     <ClInclude Include="include\menunewskirmishsinglehooks.h" />
+    <ClInclude Include="include\customsaga.h" />
+    <ClInclude Include="include\menuracecampaign.h" />
+    <ClInclude Include="include\menuracecampaignhooks.h" />
     <ClInclude Include="include\menurandomscenario.h" />
     <ClInclude Include="include\menurandomscenariomulti.h" />
     <ClInclude Include="include\menurandomscenariosingle.h" />
